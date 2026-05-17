@@ -61,153 +61,31 @@ int main(int argc, char *argv[])
     //
     // Aplica o algoritmo em pin e gera a saida em pout
     // ...
-    //
 
+    int altura, largura;
+    int lum;
 
-    
-    int grupo_altura, grupo_largura;
-    int px_comparar;
-    int px_atual_altura, px_atual_largura;
-    int pintar, grupo_igual = 1; // inicializa em 1 pra entrar 1 vez no for
-    int contador_px_igual = 0;
+    // lum=0,59⋅G+0,3⋅R+0,11⋅B;
 
-    // Navega de grupo de 3 em 3
-    for (grupo_altura = 0; grupo_altura < in.height; grupo_altura += 3)
+    for (altura = 0; altura < in.height; altura++)
     {
-        // Navega de grupo de 3 em 3
-        for (grupo_largura = 0; grupo_largura < in.width; grupo_largura += 3)
+        for (largura = 0; largura < in.width; largura++)
         {
+            lum = pin[altura][largura].r * 0.3 + pin[altura][largura].g * 0.59 + pin[altura][largura].b * 0.11;
 
-            // Pega os pixeis a serem comparados
-            for (px_comparar = 1; px_comparar < in.height; px_comparar++)
-            {
-                // Caso encontrar clone, passa denovo pintando
-                for (pintar = 0; pintar < 2 && grupo_igual != 0; pintar++)
-                {
+            pout[altura][largura].r = lum;
+            pout[altura][largura].g = lum;
+            pout[altura][largura].b = lum;
 
-                    // Toda vez tem de contar de 0 a 9, precisa ser reinciado
-                    contador_px_igual = 0;
-
-                    // Deixa fixo um 3 x 3 para comparar 1 grupo com o resto da imagem
-                    for (px_atual_altura = 0; px_atual_altura < 3; px_atual_altura++)
-                    {
-                        // Deixa fixo um 3 x 3 para comparar 1 grupo com o resto da imagem
-                        for (px_atual_largura = 0; px_atual_largura < 3; px_atual_largura++)
-                        {
-
-                            // Descobre se o grupo é igual
-                            if (grupo_igual == 0)
-                            {
-                                // compara 1 fixo com o resto da imagem, pegando de 3 em 3
-                                if (pin[px_atual_altura + grupo_altura][px_atual_largura + grupo_largura].r == pin[px_atual_altura + grupo_altura + (3 * px_comparar)][px_atual_largura + grupo_largura + (3 * px_comparar)].r && pin[px_atual_altura + grupo_altura][px_atual_largura + grupo_largura].g == pin[px_atual_altura + grupo_altura + (3 * px_comparar)][px_atual_largura + grupo_largura + (3 * px_comparar)].g && pin[px_atual_altura + grupo_altura][px_atual_largura + grupo_largura].b == pin[px_atual_altura + grupo_altura + (3 * px_comparar)][px_atual_largura + grupo_largura + (3 * px_comparar)].b)
-                                {
-                                    contador_px_igual++;
-                                }
-                            }
-
-                            // Se o grupo é igual, somente altera a cor indicando que é clone
-                            if (grupo_igual == 1)
-                            {
-                                pout[px_atual_altura + grupo_altura][px_atual_largura + grupo_largura].r = 255;
-                                pout[px_atual_altura + grupo_altura][px_atual_largura + grupo_largura].g = 0;
-                                pout[px_atual_altura + grupo_altura][px_atual_largura + grupo_largura].b = 0;
-
-                                pout[px_atual_altura + grupo_altura + (3 * px_comparar)][px_atual_largura + grupo_largura + (3 * px_comparar)].r = 255;
-                                pout[px_atual_altura + grupo_altura + (3 * px_comparar)][px_atual_largura + grupo_largura + (3 * px_comparar)].g = 0;
-                                pout[px_atual_altura + grupo_altura + (3 * px_comparar)][px_atual_largura + grupo_largura + (3 * px_comparar)].b = 0;
-                            }
-
-                            // Caso o grupo 3 x 3 seja igual
-                            if (contador_px_igual == 9)
-                            {
-                                // Achou, portanto vai rodar for denovo pintando
-                                grupo_igual = 1;
-                            }
-                            else
-                            {
-                                // Enquanto grupo não é igual, não vai pintar
-                                grupo_igual = 0;
-                            }
-                        }
-                    }
-                }
-            }
+            /*
+            pout[altura][largura].r = pin[altura][largura].r;
+            pout[altura][largura].g = pin[altura][largura].g;
+            pout[altura][largura].b = pin[altura][largura].b;
+            */
         }
     }
 
-
     /*
-    //
-    // Neste ponto, voce deve implementar o algoritmo!
-    //
-
-    
-    int tam_bloco = 8; // Equivalente ao seu 3, mas 8 evita que ele ache blocos iguais atoa.
-
-    // 1. Percorre a imagem para pegar o grupo de ORIGEM
-    for (int grupo_altura = 0; grupo_altura <= in.height - tam_bloco; grupo_altura++)
-    {
-        for (int grupo_largura = 0; grupo_largura <= in.width - tam_bloco; grupo_largura++)
-        {
-            
-            // 2. Procura um grupo IGUAL no resto da imagem (DESTINO)
-            for (int comparar_altura = grupo_altura; comparar_altura <= in.height - tam_bloco; comparar_altura++)
-            {
-                // Se estiver na mesma linha da altura, começa a procurar um pouco mais pra frente na largura 
-                // para não comparar o grupo com ele mesmo
-                int inicio_largura = (comparar_altura == grupo_altura) ? (grupo_largura + tam_bloco) : 0; 
-
-                for (int comparar_largura = inicio_largura; comparar_largura <= in.width - tam_bloco; comparar_largura++)
-                {
-                    int grupo_igual = 1; // Assumimos que o grupo é igual no começo
-
-                    // 3. Compara pixel a pixel dentro do grupo (fixando o tamanho do bloco)
-                    for (int px_atual_altura = 0; px_atual_altura < tam_bloco; px_atual_altura++)
-                    {
-                        for (int px_atual_largura = 0; px_atual_largura < tam_bloco; px_atual_largura++)
-                        {
-                            // Pega o pixel da origem e o pixel do destino
-                            Pixel p1 = pin[grupo_altura + px_atual_altura][grupo_largura + px_atual_largura];
-                            Pixel p2 = pin[comparar_altura + px_atual_altura][comparar_largura + px_atual_largura];
-
-                            // Descobre se os pixels do grupo são diferentes
-                            if (p1.r != p2.r || p1.g != p2.g || p1.b != p2.b)
-                            {
-                                grupo_igual = 0; // Não é clone
-                                break; // Sai do for da largura (px_atual_largura)
-                            }
-                        }
-                        if (grupo_igual == 0) break; // Sai do for da altura (px_atual_altura)
-                    }
-
-                    // 4. Se o grupo é igual, altera a cor indicando que é clone
-                    if (grupo_igual == 1)
-                    {
-                        for (int px_atual_altura = 0; px_atual_altura < tam_bloco; px_atual_altura++)
-                        {
-                            for (int px_atual_largura = 0; px_atual_largura < tam_bloco; px_atual_largura++)
-                            {
-                                // Pinta o grupo original (Verde, por exemplo)
-                                pout[grupo_altura + px_atual_altura][grupo_largura + px_atual_largura].r = 0;
-                                pout[grupo_altura + px_atual_altura][grupo_largura + px_atual_largura].g = 255;
-                                pout[grupo_altura + px_atual_altura][grupo_largura + px_atual_largura].b = 0;
-
-                                // Pinta o grupo clonado (Vermelho, conforme seu código original)
-                                pout[comparar_altura + px_atual_altura][comparar_largura + px_atual_largura].r = 255;
-                                pout[comparar_altura + px_atual_altura][comparar_largura + px_atual_largura].g = 0;
-                                pout[comparar_altura + px_atual_altura][comparar_largura + px_atual_largura].b = 0;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    */
-
-
-    /*
-
     // Exemplo: inverte as cores
     for (int i = 0; i < in.height; i++)
     {
@@ -218,7 +96,9 @@ int main(int argc, char *argv[])
             pout[i][j].b = 255 - pin[i][j].b;
         }
     }
+    */
 
+    /*
     // Exemplo: desenha uma linha vermelha de um canto a outro da imagem
     Pixel red = {255, 0, 0};
     draw_line(out.width, out.height, pout, 0, 0, out.width - 1, out.height - 1, red, 5);
