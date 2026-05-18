@@ -28,11 +28,6 @@ Img in, out;
 // Protótipos
 void load(char *name, Img *pic);
 void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness);
-void draw_rectangle(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness);
-float calcular_luminancia(Pixel p);
-float comparar_blocos(Pixel bloco1[], Pixel bloco2[], int tamanho);
-float calcular_variancia(Pixel bloco[], int tamanho);
-void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][width]);
 
 int main(int argc, char *argv[])
 {
@@ -61,9 +56,24 @@ int main(int argc, char *argv[])
     Pixel (*pout)[in.width] = (Pixel(*)[in.height]) out.pixels;
 
     //
-    // Processa a imagem para detectar clones (copy-move-forgery)
+    // Neste ponto, voce deve implementar o algoritmo!
+    // (ou chamar funcoes para fazer isso)
     //
-    processar_imagem(in.width, in.height, pin, pout);
+    // Aplica o algoritmo em pin e gera a saida em pout
+    // ...
+    //
+    // Exemplo: inverte as cores
+    for(int i=0; i<in.height; i++) {
+        for(int j=0; j<in.width; j++) {
+            pout[i][j].r = 255 - pin[i][j].r;
+            pout[i][j].g = 255 - pin[i][j].g;
+            pout[i][j].b = 255 - pin[i][j].b;
+        }
+    }
+
+    // Exemplo: desenha uma linha vermelha de um canto a outro da imagem
+    Pixel red = {255, 0, 0};
+    draw_line(out.width, out.height, pout, 0, 0, out.width-1, out.height-1, red, 5);
 
     // NÃO ALTERAR A PARTIR DAQUI!
 
@@ -120,207 +130,3 @@ void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1
     }
 }
 
-// Desenha um retângulo em volta de uma região
-void draw_rectangle(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness) {
-    // Top line
-    draw_line(width, height, img, x0, y0, x1, y0, color, thickness);
-    // Bottom line
-    draw_line(width, height, img, x0, y1, x1, y1, color, thickness);
-    // Left line
-    draw_line(width, height, img, x0, y0, x0, y1, color, thickness);
-    // Right line
-    draw_line(width, height, img, x1, y0, x1, y1, color, thickness);
-}
-
-// Calcula a luminância (escala de cinza) de um pixel
-float calcular_luminancia(Pixel p) {
-    return 0.59f * p.g + 0.30f * p.r + 0.11f * p.b;
-}
-
-// Compara dois blocos de pixels usando distância euclidiana
-// Retorna um valor entre 0 (idênticos) e infinito (completamente diferentes)
-float comparar_blocos(Pixel bloco1[], Pixel bloco2[], int tamanho) {
-    float soma = 0.0f;
-    for (int i = 0; i < tamanho; i++) {
-        float diff_r = bloco1[i].r - bloco2[i].r;
-        float diff_g = bloco1[i].g - bloco2[i].g;
-        float diff_b = bloco1[i].b - bloco2[i].b;
-        soma += diff_r * diff_r + diff_g * diff_g + diff_b * diff_b;
-    }
-    return soma / (tamanho * 3);  // MSE normalizado para RGB
-}
-
-// Calcula a variância de um bloco (uniformidade)
-float calcular_variancia(Pixel bloco[], int tamanho) {
-    float media_r = 0, media_g = 0, media_b = 0;
-    
-    // Calcula média
-    for (int i = 0; i < tamanho; i++) {
-        media_r += bloco[i].r;
-        media_g += bloco[i].g;
-        media_b += bloco[i].b;
-    }
-    media_r /= tamanho;
-    media_g /= tamanho;
-    media_b /= tamanho;
-    
-    // Calcula variância
-    float variancia = 0;
-    for (int i = 0; i < tamanho; i++) {
-        float diff_r = bloco[i].r - media_r;
-        float diff_g = bloco[i].g - media_g;
-        float diff_b = bloco[i].b - media_b;
-        variancia += diff_r * diff_r + diff_g * diff_g + diff_b * diff_b;
-    }
-    return variancia / (tamanho * 3);
-}
-
-// Avalia se um bloco tem mais chance de ser árvore que chão ou céu
-int eh_bloco_arvore(Pixel bloco[], int tamanho) {
-    float media_r = 0, media_g = 0, media_b = 0;
-    float saturacao = 0;
-    for (int i = 0; i < tamanho; i++) {
-        unsigned char r = bloco[i].r;
-        unsigned char g = bloco[i].g;
-        unsigned char b = bloco[i].b;
-        media_r += r;
-        media_g += g;
-        media_b += b;
-        int maxc = r > g ? (r > b ? r : b) : (g > b ? g : b);
-        int minc = r < g ? (r < b ? r : b) : (g < b ? g : b);
-        saturacao += (float)(maxc - minc);
-    }
-    media_r /= tamanho;
-    media_g /= tamanho;
-    media_b /= tamanho;
-    saturacao /= tamanho;
-
-    float green_bias = media_g - (media_r + media_b) * 0.5f;
-    float green_ratio = media_g / ((media_r + media_b) * 0.5f + 1.0f);
-    float variancia = calcular_variancia(bloco, tamanho);
-
-    if (media_g < 90.0f) return 0;
-    if (media_g <= media_r + 15.0f) return 0;
-    if (media_g <= media_b + 15.0f) return 0;
-    if (green_ratio < 1.15f) return 0;
-    if (saturacao < 18.0f) return 0;
-    if (green_bias < 20.0f) return 0;
-    if (variancia < 80.0f) return 0;
-    return 1;
-}
-
-void draw_point(int width, int height, Pixel img[][width], int cx, int cy, Pixel color, int radius) {
-    for (int dy = -radius; dy <= radius; dy++) {
-        for (int dx = -radius; dx <= radius; dx++) {
-            int x = cx + dx;
-            int y = cy + dy;
-            if (x >= 0 && x < width && y >= 0 && y < height) {
-                img[y][x] = color;
-            }
-        }
-    }
-}
-
-// Processa a imagem para detectar copy-move-forgery
-void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][width]) {
-    int BLOCO_SIZE = 20;  // reduzido para maior precisão de pontos
-    float THRESHOLD = 220.0f;  // limiar para similaridade
-    float MIN_VARIANCIA = 70.0f;  // permite texturas da árvore
-
-    int num_blocos_x = width / BLOCO_SIZE;
-    int num_blocos_y = height / BLOCO_SIZE;
-    int num_blocos = num_blocos_x * num_blocos_y;
-
-    // Copia a imagem original para a saída
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            pout[i][j] = pin[i][j];
-        }
-    }
-
-    Pixel cor_verde = {0, 255, 0};
-
-    char *used = (char*)calloc(num_blocos, sizeof(char));
-    if (!used) return;
-
-    for (int by1 = 0; by1 < num_blocos_y; by1++) {
-        for (int bx1 = 0; bx1 < num_blocos_x; bx1++) {
-            int idx_block1 = by1 * num_blocos_x + bx1;
-            if (used[idx_block1]) continue;
-
-            int x1_start = bx1 * BLOCO_SIZE;
-            int y1_start = by1 * BLOCO_SIZE;
-            int cx1 = x1_start + BLOCO_SIZE / 2;
-            int cy1 = y1_start + BLOCO_SIZE / 2;
-
-            Pixel bloco1[BLOCO_SIZE * BLOCO_SIZE];
-            int size1 = 0;
-            for (int i = 0; i < BLOCO_SIZE; i++) {
-                for (int j = 0; j < BLOCO_SIZE; j++) {
-                    if (y1_start + i < height && x1_start + j < width) {
-                        bloco1[size1++] = pin[y1_start + i][x1_start + j];
-                    }
-                }
-            }
-            if (size1 == 0) continue;
-
-            float var1 = calcular_variancia(bloco1, size1);
-            if (var1 < MIN_VARIANCIA) continue;
-            if (!eh_bloco_arvore(bloco1, size1)) continue;
-
-            float best_sim = 1e30f;
-            int best_bx2 = -1, best_by2 = -1;
-
-            for (int by2 = 0; by2 < num_blocos_y; by2++) {
-                for (int bx2 = 0; bx2 < num_blocos_x; bx2++) {
-                    int idx_block2 = by2 * num_blocos_x + bx2;
-                    if (idx_block2 == idx_block1) continue;
-                    if (used[idx_block2]) continue;
-
-                    int x2_start = bx2 * BLOCO_SIZE;
-                    int y2_start = by2 * BLOCO_SIZE;
-
-                    Pixel bloco2[BLOCO_SIZE * BLOCO_SIZE];
-                    int size2 = 0;
-                    for (int i = 0; i < BLOCO_SIZE; i++) {
-                        for (int j = 0; j < BLOCO_SIZE; j++) {
-                            if (y2_start + i < height && x2_start + j < width) {
-                                bloco2[size2++] = pin[y2_start + i][x2_start + j];
-                            }
-                        }
-                    }
-                    if (size2 == 0) continue;
-
-                    float var2 = calcular_variancia(bloco2, size2);
-                    if (var2 < MIN_VARIANCIA) continue;
-                    if (!eh_bloco_arvore(bloco2, size2)) continue;
-
-                    int cmp_size = size1 < size2 ? size1 : size2;
-                    float sim = comparar_blocos(bloco1, bloco2, cmp_size);
-                    if (sim < best_sim) {
-                        best_sim = sim;
-                        best_bx2 = bx2;
-                        best_by2 = by2;
-                    }
-                }
-            }
-
-            if (best_bx2 >= 0 && best_sim < THRESHOLD) {
-                int idx_block2 = best_by2 * num_blocos_x + best_bx2;
-                used[idx_block1] = 1;
-                used[idx_block2] = 1;
-
-                int x2_start = best_bx2 * BLOCO_SIZE;
-                int y2_start = best_by2 * BLOCO_SIZE;
-                int cx2 = x2_start + BLOCO_SIZE / 2;
-                int cy2 = y2_start + BLOCO_SIZE / 2;
-
-                draw_point(width, height, pout, cx1, cy1, cor_verde, 3);
-                draw_point(width, height, pout, cx2, cy2, cor_verde, 3);
-                draw_line(width, height, pout, cx1, cy1, cx2, cy2, cor_verde, 1);
-            }
-        }
-    }
-
-    free(used);
-}
