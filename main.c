@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h> // Para usar strings
+#include <string.h>
 #include <time.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -32,6 +32,7 @@ void draw_rectangle(int width, int height, Pixel img[][width], int x0, int y0, i
 float calcular_luminancia(Pixel p);
 float comparar_blocos(Pixel bloco1[], Pixel bloco2[], int tamanho);
 float calcular_variancia(Pixel bloco[], int tamanho);
+int eh_bloco_ceu(Pixel bloco[], int tamanho);
 void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][width]);
 
 int main(int argc, char *argv[])
@@ -122,13 +123,9 @@ void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1
 
 // Desenha um retângulo em volta de uma região
 void draw_rectangle(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness) {
-    // Top line
     draw_line(width, height, img, x0, y0, x1, y0, color, thickness);
-    // Bottom line
     draw_line(width, height, img, x0, y1, x1, y1, color, thickness);
-    // Left line
     draw_line(width, height, img, x0, y0, x0, y1, color, thickness);
-    // Right line
     draw_line(width, height, img, x1, y0, x1, y1, color, thickness);
 }
 
@@ -153,8 +150,7 @@ float comparar_blocos(Pixel bloco1[], Pixel bloco2[], int tamanho) {
 // Calcula a variância de um bloco (uniformidade)
 float calcular_variancia(Pixel bloco[], int tamanho) {
     float media_r = 0, media_g = 0, media_b = 0;
-    
-    // Calcula média
+
     for (int i = 0; i < tamanho; i++) {
         media_r += bloco[i].r;
         media_g += bloco[i].g;
@@ -163,8 +159,7 @@ float calcular_variancia(Pixel bloco[], int tamanho) {
     media_r /= tamanho;
     media_g /= tamanho;
     media_b /= tamanho;
-    
-    // Calcula variância
+
     float variancia = 0;
     for (int i = 0; i < tamanho; i++) {
         float diff_r = bloco[i].r - media_r;
@@ -175,59 +170,69 @@ float calcular_variancia(Pixel bloco[], int tamanho) {
     return variancia / (tamanho * 3);
 }
 
+// Detecta se um bloco é céu/fundo azulado.
+// O céu tem média de B > G > R com valores altos (acima de 150).
+// Nenhum bloco de copa de árvore ou grama passa nesse filtro.
+int eh_bloco_ceu(Pixel bloco[], int tamanho) {
+    float soma_r = 0, soma_g = 0, soma_b = 0;
+    for (int i = 0; i < tamanho; i++) {
+        soma_r += bloco[i].r;
+        soma_g += bloco[i].g;
+        soma_b += bloco[i].b;
+    }
+    float mr = soma_r / tamanho;
+    float mg = soma_g / tamanho;
+    float mb = soma_b / tamanho;
+
+    // Céu: azulado (B > G > R) e claro (B > 150)
+    return (mb > mg && mg > mr && mb > 150);
+}
+
 // Processa a imagem para detectar copy-move-forgery
 void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][width]) {
-    int BLOCO_SIZE = 24;  // Tamanho do bloco menor para detectar texturas de árvore
-    float THRESHOLD = 250.0f;  // Menos rigoroso para detectar similaridades
-    float MIN_VARIANCIA = 80.0f;  // Permite detectar mais texturas
+    int BLOCO_SIZE = 24;
+    float THRESHOLD = 250.0f;
+    float MIN_VARIANCIA = 80.0f;
 
     int num_blocos_x = width / BLOCO_SIZE;
     int num_blocos_y = height / BLOCO_SIZE;
 
     // Copia a imagem original para a saída
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
+    for (int i = 0; i < height; i++)
+        for (int j = 0; j < width; j++)
             pout[i][j] = pin[i][j];
-        }
-    }
 
-    // Cores para marcação
     Pixel cor_verde = {0, 255, 0};
 
-    // Vetor para marcar blocos já pareados
     char *used = (char*)calloc(num_blocos_x * num_blocos_y, sizeof(char));
     if (!used) return;
 
-    // Para cada bloco, encontra o melhor par disponível (greedy matching)
     for (int by1 = 0; by1 < num_blocos_y; by1++) {
         for (int bx1 = 0; bx1 < num_blocos_x; bx1++) {
             int idx_block1 = by1 * num_blocos_x + bx1;
-            if (used[idx_block1]) continue; // já pareado
+            if (used[idx_block1]) continue;
 
             int x1_start = bx1 * BLOCO_SIZE;
             int y1_start = by1 * BLOCO_SIZE;
-            int x1_end = x1_start + BLOCO_SIZE - 1;
-            int y1_end = y1_start + BLOCO_SIZE - 1;
+            int x1_end   = x1_start + BLOCO_SIZE - 1;
+            int y1_end   = y1_start + BLOCO_SIZE - 1;
 
-            // Extrai o primeiro bloco
+            // Extrai o bloco 1
             Pixel bloco1[BLOCO_SIZE * BLOCO_SIZE];
             int idx = 0;
-            for (int i = 0; i < BLOCO_SIZE; i++) {
-                for (int j = 0; j < BLOCO_SIZE; j++) {
-                    if (y1_start + i < height && x1_start + j < width) {
+            for (int i = 0; i < BLOCO_SIZE; i++)
+                for (int j = 0; j < BLOCO_SIZE; j++)
+                    if (y1_start + i < height && x1_start + j < width)
                         bloco1[idx++] = pin[y1_start + i][x1_start + j];
-                    }
-                }
-            }
 
-            int tamanho_real = idx; // número de pixels efetivos no bloco (bordas)
+            int tamanho_real = idx;
             if (tamanho_real == 0) continue;
 
-            // Ignora blocos muito uniformes (como céu ou área de uma cor)
-            float var1 = calcular_variancia(bloco1, tamanho_real);
-            if (var1 < MIN_VARIANCIA) {
-                continue;
-            }
+            // Descarta blocos uniformes (baixa variância)
+            if (calcular_variancia(bloco1, tamanho_real) < MIN_VARIANCIA) continue;
+
+            // Descarta blocos de céu/fundo azulado
+            if (eh_bloco_ceu(bloco1, tamanho_real)) continue;
 
             // Procura o melhor par disponível
             float best_sim = 1e30f;
@@ -242,27 +247,34 @@ void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][wi
                     int x2_start = bx2 * BLOCO_SIZE;
                     int y2_start = by2 * BLOCO_SIZE;
 
-                    // Extrai bloco2
+                    // Distância mínima entre blocos (evita comparar vizinhos)
+                    int cx1 = x1_start + BLOCO_SIZE / 2;
+                    int cy1 = y1_start + BLOCO_SIZE / 2;
+                    int cx2 = x2_start + BLOCO_SIZE / 2;
+                    int cy2 = y2_start + BLOCO_SIZE / 2;
+                    int ddx = cx1 - cx2, ddy = cy1 - cy2;
+                    if (ddx * ddx + ddy * ddy < 80 * 80) continue;
+
+                    // Extrai o bloco 2
                     Pixel bloco2[BLOCO_SIZE * BLOCO_SIZE];
                     int idx2 = 0;
-                    for (int i = 0; i < BLOCO_SIZE; i++) {
-                        for (int j = 0; j < BLOCO_SIZE; j++) {
-                            if (y2_start + i < height && x2_start + j < width) {
+                    for (int i = 0; i < BLOCO_SIZE; i++)
+                        for (int j = 0; j < BLOCO_SIZE; j++)
+                            if (y2_start + i < height && x2_start + j < width)
                                 bloco2[idx2++] = pin[y2_start + i][x2_start + j];
-                            }
-                        }
-                    }
+
                     int tamanho2 = idx2;
                     if (tamanho2 == 0) continue;
 
-                    // Ignora blocos muito uniformes
-                    float var2 = calcular_variancia(bloco2, tamanho2);
-                    if (var2 < MIN_VARIANCIA) continue;
+                    // Descarta blocos uniformes
+                    if (calcular_variancia(bloco2, tamanho2) < MIN_VARIANCIA) continue;
 
-                    // Para comparar, usa o menor tamanho comum (caso bordas)
+                    // Descarta blocos de céu
+                    if (eh_bloco_ceu(bloco2, tamanho2)) continue;
+
                     int comparar_tamanho = tamanho_real < tamanho2 ? tamanho_real : tamanho2;
-
                     float sim = comparar_blocos(bloco1, bloco2, comparar_tamanho);
+
                     if (sim < best_sim) {
                         best_sim = sim;
                         best_bx2 = bx2;
@@ -271,7 +283,7 @@ void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][wi
                 }
             }
 
-            // Se o melhor par for suficientemente similar, marca ambos como usados e desenha
+            // Marca o par se for similar o suficiente
             if (best_bx2 >= 0 && best_sim < THRESHOLD) {
                 int idx_block2 = best_by2 * num_blocos_x + best_bx2;
                 used[idx_block1] = 1;
@@ -279,8 +291,8 @@ void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][wi
 
                 int x2_start = best_bx2 * BLOCO_SIZE;
                 int y2_start = best_by2 * BLOCO_SIZE;
-                int x2_end = x2_start + BLOCO_SIZE - 1;
-                int y2_end = y2_start + BLOCO_SIZE - 1;
+                int x2_end   = x2_start + BLOCO_SIZE - 1;
+                int y2_end   = y2_start + BLOCO_SIZE - 1;
 
                 int cx1 = x1_start + BLOCO_SIZE / 2;
                 int cy1 = y1_start + BLOCO_SIZE / 2;
@@ -296,4 +308,3 @@ void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][wi
 
     free(used);
 }
-
