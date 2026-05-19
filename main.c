@@ -9,32 +9,32 @@
 #include <stb_image.h>
 #include <stb_image_write.h>
 
-// Um pixel Pixel (24 bits)
+// Um pixel (24 bits)
 typedef struct
 {
     unsigned char r, g, b;
 } Pixel;
 
-// Uma imagem Pixel
+// Uma imagem
 typedef struct
 {
-    int width, height;
-    int channels;
-    Pixel *pixels;
-} Img;
+    int largura, altura;
+    int canais;
+    Pixel *dados_pixels;
+} Imagem;
 
-// As 2 imagens
-Img in, out;
+// Variáveis Globais
+Imagem imagem_original, imagem_processada;
 
-// Protótipos - Atualizados com parâmetro de opacidade (alpha)
-void load(char *name, Img *pic);
-void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness, float alpha);
-void draw_rectangle(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness, float alpha);
+// Protótipos
+void carregar_imagem(char *nome_arquivo, Imagem *img);
+void desenhar_linha(int largura, int altura, Pixel matriz[][largura], int x0, int y0, int x1, int y1, Pixel cor, int espessura, float opacidade);
+void desenhar_retangulo(int largura, int altura, Pixel matriz[][largura], int x0, int y0, int x1, int y1, Pixel cor, int espessura, float opacidade);
 float calcular_luminancia(Pixel p);
 float comparar_blocos(Pixel bloco1[], Pixel bloco2[], int tamanho);
 float calcular_variancia(Pixel bloco[], int tamanho);
-float calcular_threshold_adaptativo(int width, int height, Pixel pin[][width], int bloco_size);
-void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][width]);
+float calcular_limiar_adaptativo(int largura, int altura, Pixel matriz_entrada[][largura], int tamanho_bloco);
+void processar_imagem_forense(int largura, int altura, Pixel matriz_entrada[][largura], Pixel matriz_saida[][largura]);
 
 int main(int argc, char *argv[])
 {
@@ -44,57 +44,56 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    load(argv[1], &in);
-    printf("Origem   : %s %d x %d\n", argv[1], in.width, in.height);
+    carregar_imagem(argv[1], &imagem_original);
+    printf("Origem   : %s %d x %d\n", argv[1], imagem_original.largura, imagem_original.altura);
     printf("Processando...\n");
 
-    int tam = in.width * in.height;
-    out = in;
-    out.pixels = malloc(tam * sizeof(Pixel));
-    memset(out.pixels, 0, tam * sizeof(Pixel));
+    int total_pixels = imagem_original.largura * imagem_original.altura;
+    imagem_processada = imagem_original;
+    imagem_processada.dados_pixels = malloc(total_pixels * sizeof(Pixel));
+    memset(imagem_processada.dados_pixels, 0, total_pixels * sizeof(Pixel));
 
-    Pixel (*pin)[in.width]  = (Pixel(*)[in.height]) in.pixels;
-    Pixel (*pout)[in.width] = (Pixel(*)[in.height]) out.pixels;
+    Pixel (*matriz_entrada)[imagem_original.largura]  = (Pixel(*)[imagem_original.altura]) imagem_original.dados_pixels;
+    Pixel (*matriz_saida)[imagem_original.largura] = (Pixel(*)[imagem_original.altura]) imagem_processada.dados_pixels;
 
-    processar_imagem(in.width, in.height, pin, pout);
+    processar_imagem_forense(imagem_original.largura, imagem_original.altura, matriz_entrada, matriz_saida);
 
     // NÃO ALTERAR A PARTIR DAQUI!
 
-    stbi_write_jpg("saida.jpg", out.width, out.height, 3, pout, 90);
+    stbi_write_jpg("saida.jpg", imagem_processada.largura, imagem_processada.altura, 3, matriz_saida, 90);
 
-    free(in.pixels);
-    free(out.pixels);
+    free(imagem_original.dados_pixels);
+    free(imagem_processada.dados_pixels);
 }
 
-void load(char *name, Img *pic)
+void carregar_imagem(char *nome_arquivo, Imagem *img)
 {
-    pic->pixels = (Pixel *)stbi_load(name, &pic->width, &pic->height, &pic->channels, 0);
-    if (!pic->pixels)
+    img->dados_pixels = (Pixel *)stbi_load(nome_arquivo, &img->largura, &img->altura, &img->canais, 0);
+    if (!img->dados_pixels)
     {
-        printf("STB loading error\n");
+        printf("Erro ao carregar imagem via STB\n");
         exit(1);
     }
-    printf("Load: %d x %d x %d\n", pic->width, pic->height, pic->channels);
+    printf("Load: %d x %d x %d\n", img->largura, img->altura, img->canais);
     for (int i = 0; i < 16; i++)
-        printf("[%02X %02X %02X] ", pic->pixels[i].r, pic->pixels[i].g, pic->pixels[i].b);
+        printf("[%02X %02X %02X] ", img->dados_pixels[i].r, img->dados_pixels[i].g, img->dados_pixels[i].b);
     printf("\n");
 }
 
-// Função de desenho de linha atualizada para suportar opacidade (alpha blending)
-void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness, float alpha) {
+void desenhar_linha(int largura, int altura, Pixel matriz[][largura], int x0, int y0, int x1, int y1, Pixel cor, int espessura, float opacidade) {
     int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     int dy = abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = (dx > dy ? dx : -dy) / 2, e2;
-    int half = thickness / 2;
+    int metade_espessura = espessura / 2;
+    
     while (1) {
-        for (int i = -half; i <= half; i++) {
-            for (int j = -half; j <= half; j++) {
+        for (int i = -metade_espessura; i <= metade_espessura; i++) {
+            for (int j = -metade_espessura; j <= metade_espessura; j++) {
                 int xi = x0 + i, yj = y0 + j;
-                if (xi >= 0 && xi < width && yj >= 0 && yj < height) {
-                    // Mistura a cor da linha com a cor atual do pixel
-                    img[yj][xi].r = (unsigned char)(img[yj][xi].r * (1.0f - alpha) + color.r * alpha);
-                    img[yj][xi].g = (unsigned char)(img[yj][xi].g * (1.0f - alpha) + color.g * alpha);
-                    img[yj][xi].b = (unsigned char)(img[yj][xi].b * (1.0f - alpha) + color.b * alpha);
+                if (xi >= 0 && xi < largura && yj >= 0 && yj < altura) {
+                    matriz[yj][xi].r = (unsigned char)(matriz[yj][xi].r * (1.0f - opacidade) + cor.r * opacidade);
+                    matriz[yj][xi].g = (unsigned char)(matriz[yj][xi].g * (1.0f - opacidade) + cor.g * opacidade);
+                    matriz[yj][xi].b = (unsigned char)(matriz[yj][xi].b * (1.0f - opacidade) + cor.b * opacidade);
                 }
             }
         }
@@ -105,12 +104,11 @@ void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1
     }
 }
 
-// Função de retângulo atualizada para repassar o alpha
-void draw_rectangle(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness, float alpha) {
-    draw_line(width, height, img, x0, y0, x1, y0, color, thickness, alpha);
-    draw_line(width, height, img, x0, y1, x1, y1, color, thickness, alpha);
-    draw_line(width, height, img, x0, y0, x0, y1, color, thickness, alpha);
-    draw_line(width, height, img, x1, y0, x1, y1, color, thickness, alpha);
+void desenhar_retangulo(int largura, int altura, Pixel matriz[][largura], int x0, int y0, int x1, int y1, Pixel cor, int espessura, float opacidade) {
+    desenhar_linha(largura, altura, matriz, x0, y0, x1, y0, cor, espessura, opacidade);
+    desenhar_linha(largura, altura, matriz, x0, y1, x1, y1, cor, espessura, opacidade);
+    desenhar_linha(largura, altura, matriz, x0, y0, x0, y1, cor, espessura, opacidade);
+    desenhar_linha(largura, altura, matriz, x1, y0, x1, y1, cor, espessura, opacidade);
 }
 
 float calcular_luminancia(Pixel p) {
@@ -120,26 +118,29 @@ float calcular_luminancia(Pixel p) {
 float comparar_blocos(Pixel bloco1[], Pixel bloco2[], int tamanho) {
     float soma = 0.0f;
     for (int i = 0; i < tamanho; i++) {
-        float dr = bloco1[i].r - bloco2[i].r;
-        float dg = bloco1[i].g - bloco2[i].g;
-        float db = bloco1[i].b - bloco2[i].b;
-        soma += dr*dr + dg*dg + db*db;
+        float dif_r = bloco1[i].r - bloco2[i].r;
+        float dif_g = bloco1[i].g - bloco2[i].g;
+        float dif_b = bloco1[i].b - bloco2[i].b;
+        soma += dif_r*dif_r + dif_g*dif_g + dif_b*dif_b;
     }
     return soma / (tamanho * 3);
 }
 
 float calcular_variancia(Pixel bloco[], int tamanho) {
-    float mr = 0, mg = 0, mb = 0;
+    float media_r = 0, media_g = 0, media_b = 0;
     for (int i = 0; i < tamanho; i++) {
-        mr += bloco[i].r; mg += bloco[i].g; mb += bloco[i].b;
+        media_r += bloco[i].r; media_g += bloco[i].g; media_b += bloco[i].b;
     }
-    mr /= tamanho; mg /= tamanho; mb /= tamanho;
-    float var = 0;
+    media_r /= tamanho; media_g /= tamanho; media_b /= tamanho;
+    
+    float variancia = 0;
     for (int i = 0; i < tamanho; i++) {
-        float dr = bloco[i].r - mr, dg = bloco[i].g - mg, db = bloco[i].b - mb;
-        var += dr*dr + dg*dg + db*db;
+        float dif_r = bloco[i].r - media_r;
+        float dif_g = bloco[i].g - media_g;
+        float dif_b = bloco[i].b - media_b;
+        variancia += dif_r*dif_r + dif_g*dif_g + dif_b*dif_b;
     }
-    return var / (tamanho * 3);
+    return variancia / (tamanho * 3);
 }
 
 static int cmp_float(const void *a, const void *b) {
@@ -147,130 +148,126 @@ static int cmp_float(const void *a, const void *b) {
     return (fa > fb) - (fa < fb);
 }
 
-float calcular_threshold_adaptativo(int width, int height, Pixel pin[][width], int bloco_size) {
-    int num_bx = width  / bloco_size;
-    int num_by = height / bloco_size;
-    int total  = num_bx * num_by;
+float calcular_limiar_adaptativo(int largura, int altura, Pixel matriz_entrada[][largura], int tamanho_bloco) {
+    int blocos_em_x = largura / tamanho_bloco;
+    int blocos_em_y = altura / tamanho_bloco;
+    int total_blocos = blocos_em_x * blocos_em_y;
 
-    float *variancias = malloc(total * sizeof(float));
+    float *variancias = malloc(total_blocos * sizeof(float));
     if (!variancias) return 100.0f;
 
-    int n = 0;
-    for (int by = 0; by < num_by; by++) {
-        for (int bx = 0; bx < num_bx; bx++) {
-            int xs = bx * bloco_size, ys = by * bloco_size;
-            Pixel bloco[bloco_size * bloco_size];
+    int indice = 0;
+    for (int by = 0; by < blocos_em_y; by++) {
+        for (int bx = 0; bx < blocos_em_x; bx++) {
+            int x_inicial = bx * tamanho_bloco, y_inicial = by * tamanho_bloco;
+            Pixel bloco[tamanho_bloco * tamanho_bloco];
             int k = 0;
-            for (int i = 0; i < bloco_size; i++)
-                for (int j = 0; j < bloco_size; j++)
-                    bloco[k++] = pin[ys + i][xs + j];
-            variancias[n++] = calcular_variancia(bloco, k);
+            for (int i = 0; i < tamanho_bloco; i++)
+                for (int j = 0; j < tamanho_bloco; j++)
+                    bloco[k++] = matriz_entrada[y_inicial + i][x_inicial + j];
+            variancias[indice++] = calcular_variancia(bloco, k);
         }
     }
 
-    qsort(variancias, n, sizeof(float), cmp_float);
+    qsort(variancias, indice, sizeof(float), cmp_float);
 
-    float p40 = variancias[(int)(n * 0.40f)];
-    float threshold = p40 > 100.0f ? p40 : 100.0f;
-    printf("  Threshold adaptativo (max(p40,100)): %.1f\n", threshold);
+    float percentil_40 = variancias[(int)(indice * 0.40f)];
+    float limiar_final = percentil_40 > 100.0f ? percentil_40 : 100.0f;
+    printf("  Threshold adaptativo (max(p40,100)): %.1f\n", limiar_final);
 
     free(variancias);
-    return threshold;
+    return limiar_final;
 }
 
-void processar_imagem(int width, int height, Pixel pin[][width], Pixel pout[][width]) {
-    int BLOCO_SIZE   = 24;
-    float THRESHOLD  = 250.0f;
+void processar_imagem_forense(int largura, int altura, Pixel matriz_entrada[][largura], Pixel matriz_saida[][largura]) {
+    int TAMANHO_BLOCO = 24;
+    float LIMIAR_SIMILARIDADE = 250.0f;
+    int DISTANCIA_MINIMA = TAMANHO_BLOCO * 2;
 
-    int DIST_MIN = BLOCO_SIZE * 3;
+    int num_blocos_x = largura / TAMANHO_BLOCO;
+    int num_blocos_y = altura / TAMANHO_BLOCO;
 
-    int num_blocos_x = width  / BLOCO_SIZE;
-    int num_blocos_y = height / BLOCO_SIZE;
+    for (int i = 0; i < altura; i++)
+        for (int j = 0; j < largura; j++)
+            matriz_saida[i][j] = matriz_entrada[i][j];
 
-    for (int i = 0; i < height; i++)
-        for (int j = 0; j < width; j++)
-            pout[i][j] = pin[i][j];
+    float variancia_minima = calcular_limiar_adaptativo(largura, altura, matriz_entrada, TAMANHO_BLOCO);
 
-    float MIN_VARIANCIA = calcular_threshold_adaptativo(width, height, pin, BLOCO_SIZE);
+    Pixel cor_destaque = {255, 0, 0}; // Vermelho
 
-    // Alterado para Vermelho
-    Pixel cor_vermelha = {255, 0, 0};
-
-    char *used = (char*)calloc(num_blocos_x * num_blocos_y, sizeof(char));
-    if (!used) return;
+    char *blocos_verificados = (char*)calloc(num_blocos_x * num_blocos_y, sizeof(char));
+    if (!blocos_verificados) return;
 
     for (int by1 = 0; by1 < num_blocos_y; by1++) {
         for (int bx1 = 0; bx1 < num_blocos_x; bx1++) {
-            int idx1 = by1 * num_blocos_x + bx1;
-            if (used[idx1]) continue;
+            int indice1 = by1 * num_blocos_x + bx1;
+            if (blocos_verificados[indice1]) continue;
 
-            int x1s = bx1 * BLOCO_SIZE, y1s = by1 * BLOCO_SIZE;
-            int x1e = x1s + BLOCO_SIZE - 1, y1e = y1s + BLOCO_SIZE - 1;
+            int x1_inicio = bx1 * TAMANHO_BLOCO, y1_inicio = by1 * TAMANHO_BLOCO;
+            int x1_fim = x1_inicio + TAMANHO_BLOCO - 1, y1_fim = y1_inicio + TAMANHO_BLOCO - 1;
 
-            Pixel bloco1[BLOCO_SIZE * BLOCO_SIZE];
-            int t1 = 0;
-            for (int i = 0; i < BLOCO_SIZE; i++)
-                for (int j = 0; j < BLOCO_SIZE; j++)
-                    if (y1s+i < height && x1s+j < width)
-                        bloco1[t1++] = pin[y1s+i][x1s+j];
-            if (t1 == 0) continue;
+            Pixel bloco1[TAMANHO_BLOCO * TAMANHO_BLOCO];
+            int tam1 = 0;
+            for (int i = 0; i < TAMANHO_BLOCO; i++)
+                for (int j = 0; j < TAMANHO_BLOCO; j++)
+                    if (y1_inicio+i < altura && x1_inicio+j < largura)
+                        bloco1[tam1++] = matriz_entrada[y1_inicio+i][x1_inicio+j];
+            if (tam1 == 0) continue;
 
-            if (calcular_variancia(bloco1, t1) < MIN_VARIANCIA) continue;
+            if (calcular_variancia(bloco1, tam1) < variancia_minima) continue;
 
-            int cx1 = x1s + BLOCO_SIZE/2, cy1 = y1s + BLOCO_SIZE/2;
+            int centro_x1 = x1_inicio + TAMANHO_BLOCO/2, centro_y1 = y1_inicio + TAMANHO_BLOCO/2;
 
-            float best_sim = 1e30f;
-            int   best_bx2 = -1, best_by2 = -1;
+            float melhor_similaridade = 1e30f;
+            int   melhor_bx2 = -1, melhor_by2 = -1;
 
             for (int by2 = 0; by2 < num_blocos_y; by2++) {
                 for (int bx2 = 0; bx2 < num_blocos_x; bx2++) {
-                    int idx2 = by2 * num_blocos_x + bx2;
-                    if (idx2 == idx1 || used[idx2]) continue;
+                    int indice2 = by2 * num_blocos_x + bx2;
+                    if (indice2 == indice1 || blocos_verificados[indice2]) continue;
 
-                    int x2s = bx2 * BLOCO_SIZE, y2s = by2 * BLOCO_SIZE;
-                    int cx2 = x2s + BLOCO_SIZE/2, cy2 = y2s + BLOCO_SIZE/2;
+                    int x2_inicio = bx2 * TAMANHO_BLOCO, y2_inicio = by2 * TAMANHO_BLOCO;
+                    int centro_x2 = x2_inicio + TAMANHO_BLOCO/2, centro_y2 = y2_inicio + TAMANHO_BLOCO/2;
 
-                    int ddx = cx1-cx2, ddy = cy1-cy2;
-                    if (ddx*ddx + ddy*ddy < DIST_MIN*DIST_MIN) continue;
+                    int delta_x = centro_x1 - centro_x2, delta_y = centro_y1 - centro_y2;
+                    if (delta_x*delta_x + delta_y*delta_y < DISTANCIA_MINIMA*DISTANCIA_MINIMA) continue;
 
-                    Pixel bloco2[BLOCO_SIZE * BLOCO_SIZE];
-                    int t2 = 0;
-                    for (int i = 0; i < BLOCO_SIZE; i++)
-                        for (int j = 0; j < BLOCO_SIZE; j++)
-                            if (y2s+i < height && x2s+j < width)
-                                bloco2[t2++] = pin[y2s+i][x2s+j];
-                    if (t2 == 0) continue;
+                    Pixel bloco2[TAMANHO_BLOCO * TAMANHO_BLOCO];
+                    int tam2 = 0;
+                    for (int i = 0; i < TAMANHO_BLOCO; i++)
+                        for (int j = 0; j < TAMANHO_BLOCO; j++)
+                            if (y2_inicio+i < altura && x2_inicio+j < largura)
+                                bloco2[tam2++] = matriz_entrada[y2_inicio+i][x2_inicio+j];
+                    if (tam2 == 0) continue;
 
-                    if (calcular_variancia(bloco2, t2) < MIN_VARIANCIA) continue;
+                    if (calcular_variancia(bloco2, tam2) < variancia_minima) continue;
 
-                    int t = t1 < t2 ? t1 : t2;
-                    float sim = comparar_blocos(bloco1, bloco2, t);
-                    if (sim < best_sim) {
-                        best_sim = sim;
-                        best_bx2 = bx2;
-                        best_by2 = by2;
+                    int t_min = tam1 < tam2 ? tam1 : tam2;
+                    float similaridade = comparar_blocos(bloco1, bloco2, t_min);
+                    if (similaridade < melhor_similaridade) {
+                        melhor_similaridade = similaridade;
+                        melhor_bx2 = bx2;
+                        melhor_by2 = by2;
                     }
                 }
             }
 
-            if (best_bx2 >= 0 && best_sim < THRESHOLD) {
-                int idx2 = best_by2 * num_blocos_x + best_bx2;
-                used[idx1] = 1;
-                used[idx2] = 1;
+            if (melhor_bx2 >= 0 && melhor_similaridade < LIMIAR_SIMILARIDADE) {
+                int indice2 = melhor_by2 * num_blocos_x + melhor_bx2;
+                blocos_verificados[indice1] = 1;
+                blocos_verificados[indice2] = 1;
 
-                int x2s = best_bx2 * BLOCO_SIZE, y2s = best_by2 * BLOCO_SIZE;
-                int x2e = x2s + BLOCO_SIZE - 1, y2e = y2s + BLOCO_SIZE - 1;
-                int cx2 = x2s + BLOCO_SIZE/2,   cy2 = y2s + BLOCO_SIZE/2;
+                int x2_inicio = melhor_bx2 * TAMANHO_BLOCO, y2_inicio = melhor_by2 * TAMANHO_BLOCO;
+                int x2_fim = x2_inicio + TAMANHO_BLOCO - 1, y2_fim = y2_inicio + TAMANHO_BLOCO - 1;
+                int centro_x2 = x2_inicio + TAMANHO_BLOCO/2, centro_y2 = y2_inicio + TAMANHO_BLOCO/2;
 
-                // Desenha os retângulos vermelhos, espessura 1, 100% opacos (1.0f)
-                draw_rectangle(width, height, pout, x1s, y1s, x1e, y1e, cor_vermelha, 1, 1.0f);
-                draw_rectangle(width, height, pout, x2s, y2s, x2e, y2e, cor_vermelha, 1, 1.0f);
+                desenhar_retangulo(largura, altura, matriz_saida, x1_inicio, y1_inicio, x1_fim, y1_fim, cor_destaque, 2, 0.4f);
+                desenhar_retangulo(largura, altura, matriz_saida, x2_inicio, y2_inicio, x2_fim, y2_fim, cor_destaque, 2, 0.4f);
                 
-                // Desenha a linha central vermelha, espessura 1, com 40% de opacidade (0.4f)
-                draw_line(width, height, pout, cx1, cy1, cx2, cy2, cor_vermelha, 1, 0.4f);
+                desenhar_linha(largura, altura, matriz_saida, centro_x1, centro_y1, centro_x2, centro_y2, cor_destaque, 1, 0.6f);
             }
         }
     }
 
-    free(used);
+    free(blocos_verificados);
 }
