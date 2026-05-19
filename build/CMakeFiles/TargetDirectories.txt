@@ -1,0 +1,3 @@
+/home/marco/Área de trabalho/T1/T1_PBN/build/CMakeFiles/transmutator.dir
+/home/marco/Área de trabalho/T1/T1_PBN/build/CMakeFiles/edit_cache.dir
+/home/marco/Área de trabalho/T1/T1_PBN/build/CMakeFiles/rebuild_cache.dir
