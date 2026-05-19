@@ -102,9 +102,38 @@ void load(char *name, Img *pic)
 // Algoritmo de Bresenham para desenhar uma linha em uma matriz de pixels
 void draw_line(int width, int height, Pixel img[][width], int x0, int y0, int x1, int y1, Pixel color, int thickness)
 {
-    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    int dy = abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    int err = (dx > dy ? dx : -dy) / 2, e2;
+    int dx = abs(x1 - x0);
+    int sx;
+    if (x0 < x1)
+    {
+        sx = 1;
+    }
+    else
+    {
+        sx = -1;
+    }
+
+    int dy = abs(y1 - y0);
+    int sy;
+    if (y0 < y1)
+    {
+        sy = 1;
+    }
+    else
+    {
+        sy = -1;
+    }
+
+    int err;
+    if (dx > dy)
+    {
+        err = dx / 2;
+    }
+    else
+    {
+        err = -dy / 2;
+    }
+    int e2;
 
     int half = thickness / 2;
     while (1)
@@ -223,7 +252,16 @@ float var_textura(int w, int h, Pixel img[][w], int tam_bloco)
     float corte = variancias[(int)(total_validos * 0.40f)];
     free(variancias);
 
-    return (corte > 100.0f) ? corte : 100.0f;
+    float resultado;
+    if (corte > 100.0f)
+    {
+        resultado = corte;
+    }
+    else
+    {
+        resultado = 100.0f;
+    }
+    return resultado;
 }
 
 void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
@@ -299,7 +337,15 @@ void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
                     if (t2 == 0 || calcular_variancia(b2, t2) < limiar_var)
                         continue;
 
-                    int t_min = (t1 < t2) ? t1 : t2;
+                    int t_min;
+                    if (t1 < t2)
+                    {
+                        t_min = t1;
+                    }
+                    else
+                    {
+                        t_min = t2;
+                    }
                     float score = comparar_blocos(b1, b2, t_min);
 
                     if (score < melhor_score)
@@ -329,7 +375,6 @@ void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
         }
     }
 
-    
     // Remove copias falsas
     int cluster_min = 3;
     for (int i = 0; i < total_matches; i++)
