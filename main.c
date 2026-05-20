@@ -248,17 +248,15 @@ float var_textura(int w, int h, Pixel img[][w], int tam_bloco)
 
     qsort(variancias, total_validos, sizeof(float), qsort_float);
 
-    // Escolhe ignorar os primeiros 40% dos blocos mais lisos da imagem
+    // Igonora os primeiros 40% dos blocos mais lisos da imagem
     float corte = variancias[(int)(total_validos * 0.40f)];
     free(variancias);
 
     float resultado;
-    if (corte > 100.0f)
-    {
+    if (corte > 100.0f){
         resultado = corte;
     }
-    else
-    {
+    else{
         resultado = 100.0f;
     }
     return resultado;
@@ -281,7 +279,8 @@ void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
             pout[i][j] = pin[i][j];
         }
     }
-    float limiar_var = var_textura(w, h, pin, tam_bloco);
+    
+    float variancia_minima = var_textura(w, h, pin, tam_bloco);
     char *visitados = calloc(blocos_x * blocos_y, sizeof(char));
 
     Clone matches[5000];
@@ -305,17 +304,16 @@ void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
                     b1[t1++] = pin[y1 + i][x1 + j];
 
             // Pula se o bloco for liso demais (ex: céu azul)
-            if (t1 == 0 || calcular_variancia(b1, t1) < limiar_var)
+            if (t1 == 0 || calcular_variancia(b1, t1) < variancia_minima)
                 continue;
 
             float melhor_score = 1e30f;
             int melhor_bx2 = -1, melhor_by2 = -1;
 
             // Varre o resto da imagem para achar um gêmeo para o Bloco 1
-            for (int by2 = 0; by2 < blocos_y; by2++)
-            {
-                for (int bx2 = 0; bx2 < blocos_x; bx2++)
-                {
+            for (int by2 = 0; by2 < blocos_y; by2++){
+                for (int bx2 = 0; bx2 < blocos_x; bx2++){
+
                     int idx2 = by2 * blocos_x + bx2;
                     if (idx2 == idx1 || visitados[idx2])
                         continue;
@@ -334,26 +332,21 @@ void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
                         for (int j = 0; j < tam_bloco && (x2 + j) < w; j++)
                             b2[t2++] = pin[y2 + i][x2 + j];
 
-                    if (t2 == 0 || calcular_variancia(b2, t2) < limiar_var)
+                    if (t2 == 0 || calcular_variancia(b2, t2) < variancia_minima)
                         continue;
 
                     int t_min;
                     if (t1 < t2)
-                    {
                         t_min = t1;
-                    }
                     else
-                    {
                         t_min = t2;
-                    }
+
                     float score = comparar_blocos(b1, b2, t_min);
 
-                    if (score < melhor_score)
-                    {
+                    if (score < melhor_score){
                         melhor_score = score;
                         melhor_bx2 = bx2;
-                        melhor_by2 = by2;
-                    }
+                        melhor_by2 = by2;}
                 }
             }
 
@@ -401,8 +394,10 @@ void detectar_clones(int w, int h, Pixel pin[][w], Pixel pout[][w])
             continue;
 
         // Desenha quadrados roxos em volta do blocos copiados
-        desenha_quadrado(w, h, pout, matches[i].x1, matches[i].y1, matches[i].x1 + tam_bloco - 1, matches[i].y1 + tam_bloco - 1, roxo, 2);
-        desenha_quadrado(w, h, pout, matches[i].x2, matches[i].y2, matches[i].x2 + tam_bloco - 1, matches[i].y2 + tam_bloco - 1, roxo, 2);
+        desenha_quadrado(w, h, pout, matches[i].x1, matches[i].y1, matches[i].x1 + 
+                            tam_bloco - 1, matches[i].y1 + tam_bloco - 1, roxo, 2);
+        desenha_quadrado(w, h, pout, matches[i].x2, matches[i].y2, matches[i].x2 + 
+                            tam_bloco - 1, matches[i].y2 + tam_bloco - 1, roxo, 2);
 
         // Liga o centro do bloco copiado e colado
         int c_x1 = matches[i].x1 + tam_bloco / 2;
